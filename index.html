@@ -29,10 +29,19 @@
     <!-- Add Player Section -->
     <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
       <h2 class="text-sm font-semibold mb-2 text-slate-300">Add Player to Game</h2>
-      <div class="flex gap-2">
-        <input id="playerName" type="text" placeholder="Player Name" class="bg-slate-700 text-white px-3 py-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-        <button onclick="addPlayer()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm">Add</button>
-      </div>
+      
+      <!-- FORM FOR ENTER KEY SUBMISSION -->
+      <form onsubmit="handlePlayerSubmit(event)" class="flex flex-wrap sm:flex-nowrap gap-2">
+        <input id="playerName" type="text" placeholder="Player Name" class="bg-slate-700 text-white px-3 py-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required>
+        
+        <div class="flex gap-2 w-full sm:w-auto">
+          <div class="flex items-center bg-slate-700 rounded-lg px-2 border border-slate-600 w-1/2 sm:w-28">
+            <span class="text-xs text-slate-400 mr-1">$</span>
+            <input id="playerBuyIn" type="number" value="20" placeholder="Buy-in" class="bg-transparent text-white w-full py-2 focus:outline-none text-sm font-mono" min="1" required>
+          </div>
+          <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm w-1/2 sm:w-auto transition">Add</button>
+        </div>
+      </form>
     </section>
 
     <!-- Live Table Section -->
@@ -58,7 +67,6 @@
 
   <!-- TAB 2: LEADERBOARD & HISTORY -->
   <div id="tabLeaderboard" class="space-y-6 hidden">
-    <!-- All-Time Leaderboard -->
     <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
       <h2 class="text-lg font-bold mb-3 text-emerald-400">All-Time Standings</h2>
       <div class="overflow-x-auto">
@@ -78,7 +86,6 @@
       </div>
     </section>
 
-    <!-- Game History Log -->
     <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
       <h2 class="text-sm font-semibold mb-3 text-slate-300">Past Sessions</h2>
       <div id="historyLog" class="space-y-3 text-xs">
@@ -88,7 +95,6 @@
   </div>
 
   <script>
-    const BUY_IN_AMOUNT = 100; // $100 or 100 BB
     let activePlayers = [];
 
     // --- Tab Switching ---
@@ -107,20 +113,28 @@
       }
     }
 
-    // --- Active Game Logic ---
-    function addPlayer() {
+    // --- Add Player via Form (Handles Button Click + Enter Key) ---
+    function handlePlayerSubmit(e) {
+      e.preventDefault(); // Prevents page reload on enter
+      
       const nameInput = document.getElementById('playerName');
+      const buyInInput = document.getElementById('playerBuyIn');
+      
       const name = nameInput.value.trim();
+      const buyIn = parseFloat(buyInInput.value) || 100;
+
       if (!name) return;
 
       activePlayers.push({
         id: Date.now(),
         name: name,
+        initialBuyIn: buyIn,
         reloads: 0,
         finalChips: 0
       });
 
       nameInput.value = '';
+      nameInput.focus(); // Keep focus on input for fast entry of multiple players
       renderActiveTable();
     }
 
@@ -139,7 +153,7 @@
     }
 
     function validateZeroSum() {
-      const totalIn = activePlayers.reduce((sum, p) => sum + BUY_IN_AMOUNT + (p.reloads * BUY_IN_AMOUNT), 0);
+      const totalIn = activePlayers.reduce((sum, p) => sum + p.initialBuyIn + (p.reloads * p.initialBuyIn), 0);
       const totalOut = activePlayers.reduce((sum, p) => sum + p.finalChips, 0);
       const diff = totalOut - totalIn;
 
@@ -161,13 +175,12 @@
     function calculateAndSave() {
       if (activePlayers.length === 0) return;
 
-      // 1. Calculate Net Positions
+      // Calculate Net Positions based on each player's individual initial buy-in
       let balances = activePlayers.map(p => {
-        const invested = BUY_IN_AMOUNT + (p.reloads * BUY_IN_AMOUNT);
+        const invested = p.initialBuyIn + (p.reloads * p.initialBuyIn);
         return { name: p.name, net: p.finalChips - invested, invested, reloads: p.reloads, chips: p.finalChips };
       });
 
-      // 2. Debt Minimization
       let debtors = balances.filter(b => b.net < 0).map(b => ({ name: b.name, net: -b.net }));
       let creditors = balances.filter(b => b.net > 0).map(b => ({ name: b.name, net: b.net }));
 
@@ -185,7 +198,6 @@
         if (creditors[j].net === 0) j++;
       }
 
-      // Display Settlement
       const txContainer = document.getElementById('transactions');
       txContainer.innerHTML = transactions.length 
         ? transactions.map(t => `<div class="p-2 bg-slate-700 rounded border border-slate-600">${t}</div>`).join('')
@@ -193,7 +205,6 @@
 
       document.getElementById('resultsSection').classList.remove('hidden');
 
-      // 3. Persist to localStorage
       const sessionData = {
         id: Date.now(),
         date: new Date().toLocaleDateString(),
@@ -202,16 +213,14 @@
       };
 
       const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
-      history.unshift(sessionData); // Add to top of history
+      history.unshift(sessionData);
       localStorage.setItem('poker_history', JSON.stringify(history));
     }
 
-    // --- Leaderboard & History Aggregation ---
     function renderLeaderboard() {
       const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
       const stats = {};
 
-      // Aggregate past sessions
       history.forEach(session => {
         session.players.forEach(p => {
           if (!stats[p.name]) {
@@ -223,11 +232,9 @@
         });
       });
 
-      // Sort players by total net profit (descending)
       const sorted = Object.keys(stats).map(name => ({ name, ...stats[name] }))
         .sort((a, b) => b.net - a.net);
 
-      // Render Leaderboard
       const lbBody = document.getElementById('leaderboardBody');
       lbBody.innerHTML = sorted.length ? sorted.map(s => `
         <tr class="py-2">
@@ -240,7 +247,6 @@
         </tr>
       `).join('') : `<tr><td colspan="4" class="py-4 text-center text-slate-500">No past games recorded yet.</td></tr>`;
 
-      // Render Session Logs
       const historyLog = document.getElementById('historyLog');
       historyLog.innerHTML = history.length ? history.map(s => `
         <div class="bg-slate-700/40 p-3 rounded-lg border border-slate-700 space-y-1">
@@ -262,14 +268,15 @@
       }
     }
 
-    // --- Render Active Roster ---
     function renderActiveTable() {
       const container = document.getElementById('playerList');
-      container.innerHTML = activePlayers.map(p => `
+      container.innerHTML = activePlayers.map(p => {
+        const totalIn = p.initialBuyIn + (p.reloads * p.initialBuyIn);
+        return `
         <div class="bg-slate-700/50 p-3 rounded-lg border border-slate-600 flex flex-col gap-2">
           <div class="flex justify-between items-center">
-            <span class="font-bold text-emerald-300 text-sm">${p.name}</span>
-            <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300">In: $${BUY_IN_AMOUNT + (p.reloads * BUY_IN_AMOUNT)}</span>
+            <span class="font-bold text-emerald-300 text-sm">${p.name} <span class="text-xs text-slate-400 font-normal">($${p.initialBuyIn}/buy-in)</span></span>
+            <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300">Total In: $${totalIn}</span>
           </div>
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-1">
@@ -284,7 +291,8 @@
             </div>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       validateZeroSum();
     }
