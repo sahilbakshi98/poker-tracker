@@ -43,15 +43,22 @@
 
       <div>
         <h2 class="text-sm font-semibold mb-2 text-slate-300">Add Player to Game</h2>
-        <form onsubmit="handlePlayerSubmit(event)" class="flex flex-wrap sm:flex-nowrap gap-2">
-          <input id="playerName" type="text" placeholder="Player Name" class="bg-slate-700 text-white px-3 py-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required>
-          
-          <div class="flex gap-2 w-full sm:w-auto">
-            <div class="flex items-center bg-slate-700 rounded-lg px-2 border border-slate-600 w-1/2 sm:w-28">
-              <span class="text-xs text-slate-400 mr-1">$</span>
-              <input id="playerBuyIn" type="number" value="20" placeholder="Buy-in" class="bg-transparent text-white w-full py-2 focus:outline-none text-sm font-mono" min="1" step="any" required>
+        <form onsubmit="handlePlayerSubmit(event)" class="space-y-3">
+          <div class="flex flex-wrap sm:flex-nowrap gap-2">
+            <input id="playerName" type="text" placeholder="Player Name" class="bg-slate-700 text-white px-3 py-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required>
+            
+            <div class="flex items-center bg-slate-700 rounded-lg px-2 border border-slate-600 w-full sm:w-32">
+              <span class="text-xs text-slate-400 mr-1">Buy-In: $</span>
+              <input id="playerBuyIn" type="number" value="20" placeholder="Buy-in" oninput="autoSetReload(this.value)" class="bg-transparent text-white w-full py-2 focus:outline-none text-sm font-mono" min="1" step="any" required>
             </div>
-            <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm w-1/2 sm:w-auto transition">Add</button>
+          </div>
+
+          <div class="flex gap-2 items-center justify-between">
+            <div class="flex items-center bg-slate-700 rounded-lg px-2 border border-slate-600 flex-1 sm:flex-none sm:w-44">
+              <span class="text-xs text-slate-400 mr-1">Reload: $</span>
+              <input id="playerReloadAmount" type="number" value="10" placeholder="Reload" class="bg-transparent text-white w-full py-2 focus:outline-none text-sm font-mono" min="1" step="any" required>
+            </div>
+            <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-bold text-sm transition">Add Player</button>
           </div>
         </form>
       </div>
@@ -146,6 +153,11 @@
       renderActiveTable();
     }
 
+    function autoSetReload(buyInVal) {
+      const buyIn = parseFloat(buyInVal) || 0;
+      document.getElementById('playerReloadAmount').value = buyIn > 0 ? (buyIn / 2) : 10;
+    }
+
     // --- Tab Switching ---
     function switchTab(tab) {
       document.getElementById('tabActive').classList.add('hidden');
@@ -179,9 +191,11 @@
       
       const nameInput = document.getElementById('playerName');
       const buyInInput = document.getElementById('playerBuyIn');
+      const reloadInput = document.getElementById('playerReloadAmount');
       
       const name = nameInput.value.trim();
       const buyIn = parseFloat(buyInInput.value) || 20;
+      const reloadAmount = parseFloat(reloadInput.value) || (buyIn / 2);
 
       if (!name) return;
 
@@ -189,6 +203,7 @@
         id: Date.now(),
         name: name,
         initialBuyIn: buyIn,
+        reloadAmount: reloadAmount,
         reloads: 0,
         finalChips: 0
       });
@@ -203,16 +218,21 @@
       if (!p) return;
 
       const newName = prompt("Edit Player Name:", p.name);
-      if (newName === null) return; // User cancelled
+      if (newName === null) return;
 
       const newBuyInStr = prompt("Edit Initial Buy-In ($):", p.initialBuyIn);
       if (newBuyInStr === null) return;
 
+      const newReloadStr = prompt("Edit Reload Value per Rebuy ($):", p.reloadAmount);
+      if (newReloadStr === null) return;
+
       const trimmedName = newName.trim();
       const parsedBuyIn = parseFloat(newBuyInStr);
+      const parsedReload = parseFloat(newReloadStr);
 
       if (trimmedName) p.name = trimmedName;
       if (!isNaN(parsedBuyIn) && parsedBuyIn > 0) p.initialBuyIn = parsedBuyIn;
+      if (!isNaN(parsedReload) && parsedReload > 0) p.reloadAmount = parsedReload;
 
       renderActiveTable();
     }
@@ -242,7 +262,7 @@
     }
 
     function validateZeroSum() {
-      const totalCashIn = activePlayers.reduce((sum, p) => sum + p.initialBuyIn + (p.reloads * p.initialBuyIn), 0);
+      const totalCashIn = activePlayers.reduce((sum, p) => sum + p.initialBuyIn + (p.reloads * p.reloadAmount), 0);
       const totalChipsOut = activePlayers.reduce((sum, p) => sum + p.finalChips, 0);
       const totalCashOut = totalChipsOut / chipRatio;
       const diff = Math.round((totalCashOut - totalCashIn) * 100) / 100;
@@ -280,7 +300,7 @@
       }
 
       let balances = activePlayers.map(p => {
-        const invested = p.initialBuyIn + (p.reloads * p.initialBuyIn);
+        const invested = p.initialBuyIn + (p.reloads * p.reloadAmount);
         const cashValue = p.finalChips / chipRatio;
         const rawNet = cashValue - invested;
         return { 
@@ -428,15 +448,17 @@
       }
 
       container.innerHTML = activePlayers.map(p => {
-        const totalIn = p.initialBuyIn + (p.reloads * p.initialBuyIn);
+        const totalIn = p.initialBuyIn + (p.reloads * p.reloadAmount);
         const cashValue = p.finalChips / chipRatio;
 
         return `
         <div class="bg-slate-700/50 p-3 rounded-lg border border-slate-600 flex flex-col gap-2">
           <div class="flex justify-between items-center">
             <div class="flex items-center gap-2">
-              <span class="font-bold text-emerald-300 text-sm">${p.name} <span class="text-xs text-slate-400 font-normal">($${p.initialBuyIn.toFixed(2)}/buy-in)</span></span>
-              <!-- Edit & Delete Buttons -->
+              <span class="font-bold text-emerald-300 text-sm">
+                ${p.name} 
+                <span class="text-xs text-slate-400 font-normal">($${p.initialBuyIn.toFixed(2)} in / +$${p.reloadAmount.toFixed(2)} reload)</span>
+              </span>
               <button onclick="editPlayer(${p.id})" title="Edit Player" class="text-slate-400 hover:text-amber-400 text-xs p-1 transition">✏️</button>
               <button onclick="deletePlayer(${p.id})" title="Delete Player" class="text-slate-400 hover:text-rose-400 text-xs p-1 transition">🗑️</button>
             </div>
