@@ -20,8 +20,9 @@
 
   <!-- Navigation Tabs -->
   <div class="flex gap-2 mb-6">
-    <button id="tabActiveBtn" onclick="switchTab('active')" class="flex-1 py-2 font-bold rounded-lg bg-emerald-600 text-white">Active Game</button>
-    <button id="tabLeaderboardBtn" onclick="switchTab('leaderboard')" class="flex-1 py-2 font-bold rounded-lg bg-slate-800 text-slate-400">Leaderboard</button>
+    <button id="tabActiveBtn" onclick="switchTab('active')" class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg bg-emerald-600 text-white">Active Game</button>
+    <button id="tabDetailsBtn" onclick="switchTab('details')" class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg bg-slate-800 text-slate-400">Last Game Details</button>
+    <button id="tabLeaderboardBtn" onclick="switchTab('leaderboard')" class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg bg-slate-800 text-slate-400">Leaderboard</button>
   </div>
 
   <!-- TAB 1: ACTIVE GAME -->
@@ -30,14 +31,13 @@
     <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
       <h2 class="text-sm font-semibold mb-2 text-slate-300">Add Player to Game</h2>
       
-      <!-- FORM FOR ENTER KEY SUBMISSION -->
       <form onsubmit="handlePlayerSubmit(event)" class="flex flex-wrap sm:flex-nowrap gap-2">
         <input id="playerName" type="text" placeholder="Player Name" class="bg-slate-700 text-white px-3 py-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required>
         
         <div class="flex gap-2 w-full sm:w-auto">
           <div class="flex items-center bg-slate-700 rounded-lg px-2 border border-slate-600 w-1/2 sm:w-28">
             <span class="text-xs text-slate-400 mr-1">$</span>
-            <input id="playerBuyIn" type="number" value="20" placeholder="Buy-in" class="bg-transparent text-white w-full py-2 focus:outline-none text-sm font-mono" min="1" required>
+            <input id="playerBuyIn" type="number" value="20" placeholder="Buy-in" class="bg-transparent text-white w-full py-2 focus:outline-none text-sm font-mono" min="1" step="any" required>
           </div>
           <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm w-1/2 sm:w-auto transition">Add</button>
         </div>
@@ -53,19 +53,48 @@
       
       <div id="zeroSumCheck" class="mt-4 p-3 rounded-lg bg-slate-700/50 text-sm hidden"></div>
 
-      <button onclick="calculateAndSave()" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg shadow-md transition text-sm">
+      <button id="endGameBtn" onclick="calculateAndSave()" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg shadow-md transition text-sm">
         End Game, Settle & Save to History
       </button>
     </section>
+  </div>
 
-    <!-- Settlement Results -->
-    <section id="resultsSection" class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 hidden">
-      <h2 class="text-base font-semibold mb-3 text-emerald-400">Minimised Payments</h2>
-      <div id="transactions" class="space-y-2 text-sm"></div>
+  <!-- TAB 2: LAST GAME DETAILS -->
+  <div id="tabDetails" class="space-y-6 hidden">
+    <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+      <h2 class="text-lg font-bold mb-1 text-emerald-400" id="detailsDate">Game Summary</h2>
+      <p class="text-xs text-slate-400 mb-4">Complete breakdown of the finished session</p>
+      
+      <!-- Payments Section -->
+      <div class="mb-6">
+        <h3 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Minimized Payments</h3>
+        <div id="detailsTransactions" class="space-y-2 text-sm"></div>
+      </div>
+
+      <!-- Player Table Section -->
+      <div>
+        <h3 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Player Roster & Breakdown</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-xs text-slate-400 border-b border-slate-700">
+              <tr>
+                <th class="pb-2">Player</th>
+                <th class="pb-2 text-center">Rebuys</th>
+                <th class="pb-2 text-center">Total In</th>
+                <th class="pb-2 text-center">Chips Left</th>
+                <th class="pb-2 text-right">Net Profit</th>
+              </tr>
+            </thead>
+            <tbody id="detailsPlayerBody" class="divide-y divide-slate-700/50">
+              <!-- Dynamic content -->
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </div>
 
-  <!-- TAB 2: LEADERBOARD & HISTORY -->
+  <!-- TAB 3: LEADERBOARD & HISTORY -->
   <div id="tabLeaderboard" class="space-y-6 hidden">
     <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
       <h2 class="text-lg font-bold mb-3 text-emerald-400">All-Time Standings</h2>
@@ -96,32 +125,46 @@
 
   <script>
     let activePlayers = [];
+    let lastGameSession = null;
 
     // --- Tab Switching ---
     function switchTab(tab) {
+      // Hide all tabs
+      document.getElementById('tabActive').classList.add('hidden');
+      document.getElementById('tabDetails').classList.add('hidden');
+      document.getElementById('tabLeaderboard').classList.add('hidden');
+
+      // Inactive button styling base
+      const inactiveClass = "flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg bg-slate-800 text-slate-400";
+      const activeClass = "flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg bg-emerald-600 text-white";
+
+      document.getElementById('tabActiveBtn').className = inactiveClass;
+      document.getElementById('tabDetailsBtn').className = inactiveClass;
+      document.getElementById('tabLeaderboardBtn').className = inactiveClass;
+
       if (tab === 'active') {
         document.getElementById('tabActive').classList.remove('hidden');
-        document.getElementById('tabLeaderboard').classList.add('hidden');
-        document.getElementById('tabActiveBtn').className = "flex-1 py-2 font-bold rounded-lg bg-emerald-600 text-white";
-        document.getElementById('tabLeaderboardBtn').className = "flex-1 py-2 font-bold rounded-lg bg-slate-800 text-slate-400";
-      } else {
-        document.getElementById('tabActive').classList.add('hidden');
+        document.getElementById('tabActiveBtn').className = activeClass;
+      } else if (tab === 'details') {
+        document.getElementById('tabDetails').classList.remove('hidden');
+        document.getElementById('tabDetailsBtn').className = activeClass;
+        renderDetails();
+      } else if (tab === 'leaderboard') {
         document.getElementById('tabLeaderboard').classList.remove('hidden');
-        document.getElementById('tabActiveBtn').className = "flex-1 py-2 font-bold rounded-lg bg-slate-800 text-slate-400";
-        document.getElementById('tabLeaderboardBtn').className = "flex-1 py-2 font-bold rounded-lg bg-emerald-600 text-white";
+        document.getElementById('tabLeaderboardBtn').className = activeClass;
         renderLeaderboard();
       }
     }
 
-    // --- Add Player via Form (Handles Button Click + Enter Key) ---
+    // --- Add Player via Form ---
     function handlePlayerSubmit(e) {
-      e.preventDefault(); // Prevents page reload on enter
+      e.preventDefault();
       
       const nameInput = document.getElementById('playerName');
       const buyInInput = document.getElementById('playerBuyIn');
       
       const name = nameInput.value.trim();
-      const buyIn = parseFloat(buyInInput.value) || 100;
+      const buyIn = parseFloat(buyInInput.value) || 20;
 
       if (!name) return;
 
@@ -134,7 +177,7 @@
       });
 
       nameInput.value = '';
-      nameInput.focus(); // Keep focus on input for fast entry of multiple players
+      nameInput.focus();
       renderActiveTable();
     }
 
@@ -155,32 +198,52 @@
     function validateZeroSum() {
       const totalIn = activePlayers.reduce((sum, p) => sum + p.initialBuyIn + (p.reloads * p.initialBuyIn), 0);
       const totalOut = activePlayers.reduce((sum, p) => sum + p.finalChips, 0);
-      const diff = totalOut - totalIn;
+      const diff = Math.round((totalOut - totalIn) * 100) / 100;
 
       const checkDiv = document.getElementById('zeroSumCheck');
       checkDiv.classList.remove('hidden');
 
       if (diff === 0 && activePlayers.length > 0) {
         checkDiv.className = "mt-4 p-3 rounded-lg bg-emerald-950/50 text-emerald-400 text-xs border border-emerald-800";
-        checkDiv.innerText = "✓ Chips match total buy-ins ($" + totalIn + ")";
+        checkDiv.innerText = "✓ Chips match total buy-ins ($" + totalIn.toFixed(2) + ")";
+        return true;
       } else if (activePlayers.length > 0) {
         checkDiv.className = "mt-4 p-3 rounded-lg bg-rose-950/50 text-rose-400 text-xs border border-rose-800";
-        checkDiv.innerText = `⚠️ Discrepancy: ${diff > 0 ? '+' : ''}${diff} chips unaccounted for.`;
+        checkDiv.innerText = `⚠️ Discrepancy: ${diff > 0 ? '+' : ''}${diff.toFixed(2)} chips unaccounted for.`;
+        return false;
       } else {
         checkDiv.classList.add('hidden');
+        return false;
       }
     }
 
     // --- Settlement & localStorage Handling ---
     function calculateAndSave() {
-      if (activePlayers.length === 0) return;
+      if (activePlayers.length === 0) {
+        alert("Please add at least one player before ending the game.");
+        return;
+      }
 
-      // Calculate Net Positions based on each player's individual initial buy-in
+      if (!validateZeroSum()) {
+        if (!confirm("Your remaining chips do not equal total buy-ins! Do you still want to force settle?")) {
+          return;
+        }
+      }
+
+      // 1. Clean float calculations
       let balances = activePlayers.map(p => {
         const invested = p.initialBuyIn + (p.reloads * p.initialBuyIn);
-        return { name: p.name, net: p.finalChips - invested, invested, reloads: p.reloads, chips: p.finalChips };
+        const rawNet = p.finalChips - invested;
+        return { 
+          name: p.name, 
+          net: Math.round(rawNet * 100) / 100, 
+          invested: Math.round(invested * 100) / 100, 
+          reloads: p.reloads, 
+          chips: p.finalChips 
+        };
       });
 
+      // 2. Debt Minimization
       let debtors = balances.filter(b => b.net < 0).map(b => ({ name: b.name, net: -b.net }));
       let creditors = balances.filter(b => b.net > 0).map(b => ({ name: b.name, net: b.net }));
 
@@ -191,23 +254,17 @@
         let amount = Math.min(debtors[i].net, creditors[j].net);
         transactions.push(`${debtors[i].name} pays ${creditors[j].name} $${amount.toFixed(2)}`);
 
-        debtors[i].net -= amount;
-        creditors[j].net -= amount;
+        debtors[i].net = Math.round((debtors[i].net - amount) * 100) / 100;
+        creditors[j].net = Math.round((creditors[j].net - amount) * 100) / 100;
 
         if (debtors[i].net === 0) i++;
         if (creditors[j].net === 0) j++;
       }
 
-      const txContainer = document.getElementById('transactions');
-      txContainer.innerHTML = transactions.length 
-        ? transactions.map(t => `<div class="p-2 bg-slate-700 rounded border border-slate-600">${t}</div>`).join('')
-        : '<div class="text-slate-400">Everyone broke even!</div>';
-
-      document.getElementById('resultsSection').classList.remove('hidden');
-
+      // 3. Store Session
       const sessionData = {
         id: Date.now(),
-        date: new Date().toLocaleDateString(),
+        date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         players: balances,
         transactions: transactions
       };
@@ -215,8 +272,58 @@
       const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
       history.unshift(sessionData);
       localStorage.setItem('poker_history', JSON.stringify(history));
+
+      // 4. Cache as Last Game & Reset Active State
+      lastGameSession = sessionData;
+      activePlayers = [];
+      renderActiveTable();
+
+      // 5. Navigate to Details Tab
+      switchTab('details');
     }
 
+    // --- Render Game Details Tab ---
+    function renderDetails() {
+      if (!lastGameSession) {
+        const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
+        if (history.length > 0) {
+          lastGameSession = history[0];
+        }
+      }
+
+      const txContainer = document.getElementById('detailsTransactions');
+      const playerBody = document.getElementById('detailsPlayerBody');
+      const dateHeader = document.getElementById('detailsDate');
+
+      if (!lastGameSession) {
+        dateHeader.innerText = "No Recent Game Found";
+        txContainer.innerHTML = `<div class="text-slate-400">Complete a game in the Active Game tab to view details here.</div>`;
+        playerBody.innerHTML = '';
+        return;
+      }
+
+      dateHeader.innerText = `Game Summary (${lastGameSession.date})`;
+
+      // Render Payments
+      txContainer.innerHTML = lastGameSession.transactions.length 
+        ? lastGameSession.transactions.map(t => `<div class="p-2 bg-slate-700/60 rounded border border-slate-600">${t}</div>`).join('')
+        : '<div class="text-slate-400">Everyone broke even!</div>';
+
+      // Render Table
+      playerBody.innerHTML = lastGameSession.players.map(p => `
+        <tr class="py-2">
+          <td class="py-2 font-bold text-slate-200">${p.name}</td>
+          <td class="py-2 text-center text-slate-400">${p.reloads}</td>
+          <td class="py-2 text-center text-slate-400">$${p.invested.toFixed(2)}</td>
+          <td class="py-2 text-center text-slate-400">$${p.chips.toFixed(2)}</td>
+          <td class="py-2 text-right font-mono font-bold ${p.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
+            ${p.net >= 0 ? '+' : ''}$${p.net.toFixed(2)}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // --- Render Leaderboard Tab ---
     function renderLeaderboard() {
       const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
       const stats = {};
@@ -242,7 +349,7 @@
           <td class="py-2 text-center text-slate-400">${s.games}</td>
           <td class="py-2 text-center text-slate-400">${s.reloads}</td>
           <td class="py-2 text-right font-mono font-bold ${s.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
-            ${s.net >= 0 ? '+' : ''}$${s.net}
+            ${s.net >= 0 ? '+' : ''}$${s.net.toFixed(2)}
           </td>
         </tr>
       `).join('') : `<tr><td colspan="4" class="py-4 text-center text-slate-500">No past games recorded yet.</td></tr>`;
@@ -255,7 +362,7 @@
             <span>${s.players.length} Players</span>
           </div>
           <div class="text-slate-400">
-            ${s.players.map(p => `${p.name}: <span class="${p.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${p.net >= 0 ? '+' : ''}$${p.net}</span>`).join(' • ')}
+            ${s.players.map(p => `${p.name}: <span class="${p.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${p.net >= 0 ? '+' : ''}$${p.net.toFixed(2)}</span>`).join(' • ')}
           </div>
         </div>
       `).join('') : `<div class="text-slate-500">History is empty.</div>`;
@@ -264,19 +371,27 @@
     function clearHistory() {
       if (confirm("Are you sure you want to delete all historical games and reset the leaderboard?")) {
         localStorage.removeItem('poker_history');
+        lastGameSession = null;
         renderLeaderboard();
+        renderDetails();
       }
     }
 
     function renderActiveTable() {
       const container = document.getElementById('playerList');
+      if (activePlayers.length === 0) {
+        container.innerHTML = `<div class="text-slate-500 text-xs text-center py-4">No active players. Add players above to start tracking!</div>`;
+        validateZeroSum();
+        return;
+      }
+
       container.innerHTML = activePlayers.map(p => {
         const totalIn = p.initialBuyIn + (p.reloads * p.initialBuyIn);
         return `
         <div class="bg-slate-700/50 p-3 rounded-lg border border-slate-600 flex flex-col gap-2">
           <div class="flex justify-between items-center">
-            <span class="font-bold text-emerald-300 text-sm">${p.name} <span class="text-xs text-slate-400 font-normal">($${p.initialBuyIn}/buy-in)</span></span>
-            <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300">Total In: $${totalIn}</span>
+            <span class="font-bold text-emerald-300 text-sm">${p.name} <span class="text-xs text-slate-400 font-normal">($${p.initialBuyIn.toFixed(2)}/buy-in)</span></span>
+            <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300">Total In: $${totalIn.toFixed(2)}</span>
           </div>
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-1">
@@ -287,7 +402,7 @@
             </div>
             <div class="flex items-center gap-1">
               <span class="text-xs text-slate-400">Chips Left:</span>
-              <input type="number" value="${p.finalChips}" onchange="updateChips(${p.id}, this.value)" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm">
+              <input type="number" value="${p.finalChips}" onchange="updateChips(${p.id}, this.value)" step="any" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm">
             </div>
           </div>
         </div>
@@ -296,6 +411,9 @@
 
       validateZeroSum();
     }
+
+    // Initial render
+    renderActiveTable();
   </script>
 </body>
 </html>
