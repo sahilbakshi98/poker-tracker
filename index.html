@@ -27,21 +27,34 @@
 
   <!-- TAB 1: ACTIVE GAME -->
   <div id="tabActive" class="space-y-6">
-    <!-- Add Player Section -->
-    <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
-      <h2 class="text-sm font-semibold mb-2 text-slate-300">Add Player to Game</h2>
-      
-      <form onsubmit="handlePlayerSubmit(event)" class="flex flex-wrap sm:flex-nowrap gap-2">
-        <input id="playerName" type="text" placeholder="Player Name" class="bg-slate-700 text-white px-3 py-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required>
-        
-        <div class="flex gap-2 w-full sm:w-auto">
-          <div class="flex items-center bg-slate-700 rounded-lg px-2 border border-slate-600 w-1/2 sm:w-28">
-            <span class="text-xs text-slate-400 mr-1">$</span>
-            <input id="playerBuyIn" type="number" value="20" placeholder="Buy-in" class="bg-transparent text-white w-full py-2 focus:outline-none text-sm font-mono" min="1" step="any" required>
-          </div>
-          <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm w-1/2 sm:w-auto transition">Add</button>
+    
+    <!-- Game Configuration & Add Player -->
+    <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 space-y-4">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-300 mb-1">Game Chip Value Ratio</h2>
+        <div class="flex items-center gap-2 bg-slate-700/50 p-2 rounded-lg border border-slate-600 text-xs">
+          <span class="text-slate-400">Ratio:</span>
+          <input id="globalChipRatio" type="number" value="10" onchange="updateRatio(this.value)" class="w-16 bg-slate-800 text-center text-white font-mono px-2 py-1 rounded border border-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500" min="0.01" step="any">
+          <span class="text-slate-300">chip points = <strong class="text-emerald-400">$1.00 cash</strong></span>
         </div>
-      </form>
+      </div>
+
+      <hr class="border-slate-700">
+
+      <div>
+        <h2 class="text-sm font-semibold mb-2 text-slate-300">Add Player to Game</h2>
+        <form onsubmit="handlePlayerSubmit(event)" class="flex flex-wrap sm:flex-nowrap gap-2">
+          <input id="playerName" type="text" placeholder="Player Name" class="bg-slate-700 text-white px-3 py-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required>
+          
+          <div class="flex gap-2 w-full sm:w-auto">
+            <div class="flex items-center bg-slate-700 rounded-lg px-2 border border-slate-600 w-1/2 sm:w-28">
+              <span class="text-xs text-slate-400 mr-1">$</span>
+              <input id="playerBuyIn" type="number" value="20" placeholder="Buy-in" class="bg-transparent text-white w-full py-2 focus:outline-none text-sm font-mono" min="1" step="any" required>
+            </div>
+            <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm w-1/2 sm:w-auto transition">Add</button>
+          </div>
+        </form>
+      </div>
     </section>
 
     <!-- Live Table Section -->
@@ -81,7 +94,7 @@
                 <th class="pb-2">Player</th>
                 <th class="pb-2 text-center">Rebuys</th>
                 <th class="pb-2 text-center">Total In</th>
-                <th class="pb-2 text-center">Chips Left</th>
+                <th class="pb-2 text-center">Chips</th>
                 <th class="pb-2 text-right">Net Profit</th>
               </tr>
             </thead>
@@ -126,15 +139,19 @@
   <script>
     let activePlayers = [];
     let lastGameSession = null;
+    let chipRatio = 10; // Default: 10 chip points = $1 cash
+
+    function updateRatio(val) {
+      chipRatio = parseFloat(val) || 1;
+      renderActiveTable();
+    }
 
     // --- Tab Switching ---
     function switchTab(tab) {
-      // Hide all tabs
       document.getElementById('tabActive').classList.add('hidden');
       document.getElementById('tabDetails').classList.add('hidden');
       document.getElementById('tabLeaderboard').classList.add('hidden');
 
-      // Inactive button styling base
       const inactiveClass = "flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg bg-slate-800 text-slate-400";
       const activeClass = "flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg bg-emerald-600 text-white";
 
@@ -192,24 +209,27 @@
     function updateChips(id, val) {
       const p = activePlayers.find(x => x.id === id);
       if (p) p.finalChips = parseFloat(val) || 0;
-      validateZeroSum();
+      renderActiveTable();
     }
 
     function validateZeroSum() {
-      const totalIn = activePlayers.reduce((sum, p) => sum + p.initialBuyIn + (p.reloads * p.initialBuyIn), 0);
-      const totalOut = activePlayers.reduce((sum, p) => sum + p.finalChips, 0);
-      const diff = Math.round((totalOut - totalIn) * 100) / 100;
+      const totalCashIn = activePlayers.reduce((sum, p) => sum + p.initialBuyIn + (p.reloads * p.initialBuyIn), 0);
+      const totalChipsOut = activePlayers.reduce((sum, p) => sum + p.finalChips, 0);
+      const totalCashOut = totalChipsOut / chipRatio;
+      const diff = Math.round((totalCashOut - totalCashIn) * 100) / 100;
 
       const checkDiv = document.getElementById('zeroSumCheck');
       checkDiv.classList.remove('hidden');
 
+      const expectedChips = totalCashIn * chipRatio;
+
       if (diff === 0 && activePlayers.length > 0) {
         checkDiv.className = "mt-4 p-3 rounded-lg bg-emerald-950/50 text-emerald-400 text-xs border border-emerald-800";
-        checkDiv.innerText = "✓ Chips match total buy-ins ($" + totalIn.toFixed(2) + ")";
+        checkDiv.innerText = `✓ Total Chips Match: ${expectedChips.toFixed(0)} chips ($${totalCashIn.toFixed(2)})`;
         return true;
       } else if (activePlayers.length > 0) {
         checkDiv.className = "mt-4 p-3 rounded-lg bg-rose-950/50 text-rose-400 text-xs border border-rose-800";
-        checkDiv.innerText = `⚠️ Discrepancy: ${diff > 0 ? '+' : ''}${diff.toFixed(2)} chips unaccounted for.`;
+        checkDiv.innerText = `⚠️ Discrepancy: ${diff > 0 ? '+' : ''}$${diff.toFixed(2)} (${(diff * chipRatio).toFixed(1)} chips unaccounted for)`;
         return false;
       } else {
         checkDiv.classList.add('hidden');
@@ -230,16 +250,18 @@
         }
       }
 
-      // 1. Clean float calculations
+      // 1. Convert chips to cash and calculate net positions
       let balances = activePlayers.map(p => {
         const invested = p.initialBuyIn + (p.reloads * p.initialBuyIn);
-        const rawNet = p.finalChips - invested;
+        const cashValue = p.finalChips / chipRatio;
+        const rawNet = cashValue - invested;
         return { 
           name: p.name, 
           net: Math.round(rawNet * 100) / 100, 
           invested: Math.round(invested * 100) / 100, 
           reloads: p.reloads, 
-          chips: p.finalChips 
+          chips: p.finalChips,
+          cashValue: Math.round(cashValue * 100) / 100
         };
       });
 
@@ -273,7 +295,7 @@
       history.unshift(sessionData);
       localStorage.setItem('poker_history', JSON.stringify(history));
 
-      // 4. Cache as Last Game & Reset Active State
+      // 4. Reset Active State
       lastGameSession = sessionData;
       activePlayers = [];
       renderActiveTable();
@@ -286,9 +308,7 @@
     function renderDetails() {
       if (!lastGameSession) {
         const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
-        if (history.length > 0) {
-          lastGameSession = history[0];
-        }
+        if (history.length > 0) lastGameSession = history[0];
       }
 
       const txContainer = document.getElementById('detailsTransactions');
@@ -304,18 +324,16 @@
 
       dateHeader.innerText = `Game Summary (${lastGameSession.date})`;
 
-      // Render Payments
       txContainer.innerHTML = lastGameSession.transactions.length 
         ? lastGameSession.transactions.map(t => `<div class="p-2 bg-slate-700/60 rounded border border-slate-600">${t}</div>`).join('')
         : '<div class="text-slate-400">Everyone broke even!</div>';
 
-      // Render Table
       playerBody.innerHTML = lastGameSession.players.map(p => `
         <tr class="py-2">
           <td class="py-2 font-bold text-slate-200">${p.name}</td>
           <td class="py-2 text-center text-slate-400">${p.reloads}</td>
           <td class="py-2 text-center text-slate-400">$${p.invested.toFixed(2)}</td>
-          <td class="py-2 text-center text-slate-400">$${p.chips.toFixed(2)}</td>
+          <td class="py-2 text-center text-slate-400">${p.chips} <span class="text-xs text-slate-500">($${p.cashValue.toFixed(2)})</span></td>
           <td class="py-2 text-right font-mono font-bold ${p.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
             ${p.net >= 0 ? '+' : ''}$${p.net.toFixed(2)}
           </td>
@@ -387,6 +405,8 @@
 
       container.innerHTML = activePlayers.map(p => {
         const totalIn = p.initialBuyIn + (p.reloads * p.initialBuyIn);
+        const cashValue = p.finalChips / chipRatio;
+
         return `
         <div class="bg-slate-700/50 p-3 rounded-lg border border-slate-600 flex flex-col gap-2">
           <div class="flex justify-between items-center">
@@ -401,8 +421,9 @@
               <button onclick="updateReloads(${p.id}, 1)" class="w-6 h-6 bg-slate-600 rounded font-bold text-sm">+</button>
             </div>
             <div class="flex items-center gap-1">
-              <span class="text-xs text-slate-400">Chips Left:</span>
-              <input type="number" value="${p.finalChips}" onchange="updateChips(${p.id}, this.value)" step="any" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm">
+              <span class="text-xs text-slate-400">Chips:</span>
+              <input type="number" value="${p.finalChips}" oninput="updateChips(${p.id}, this.value)" step="any" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm font-mono">
+              <span class="text-xs text-emerald-400 font-mono font-semibold">($${cashValue.toFixed(2)})</span>
             </div>
           </div>
         </div>
