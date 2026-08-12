@@ -78,7 +78,7 @@
       <div id="zeroSumCheck" class="mt-4 p-3 rounded-lg bg-slate-700/50 text-sm hidden"></div>
 
       <button id="endGameBtn" onclick="calculateAndSave()" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg shadow-md transition text-sm">
-        End Game, Settle & Save to Database
+        End Game, Settle & Save to History
       </button>
     </section>
   </div>
@@ -147,35 +147,18 @@
     </section>
   </div>
 
-  <!-- Firebase Logic Integration -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-    // ⚠️ REPLACE WITH YOUR FIREBASE CONFIG FROM STEP 1 ⚠️
-    const firebaseConfig = {
-      apiKey: "AIzaSyDORAvzwJUY1HpoGmBDXLuoCXxj6mX-4LA",
-      authDomain: "poker-tracker-69c64.firebaseapp.com",
-      projectId: "poker-tracker-69c64",
-      storageBucket: "poker-tracker-69c64.firebasestorage.app",
-      messagingSenderId: "120303599741",
-      appId: "1:120303599741:web:f93c48eb031a232bc4b114"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
+  <script>
     let activePlayers = [];
-    let historyCache = [];
     let lastGameSession = null;
     let chipRatio = 10;
 
-    window.updateRatio = function(val) {
+    function updateRatio(val) {
       chipRatio = parseFloat(val) || 1;
       renderActiveTable();
     }
 
-    window.switchTab = function(tab) {
+    // --- Tab Switching ---
+    function switchTab(tab) {
       document.getElementById('tabActive').classList.add('hidden');
       document.getElementById('tabDetails').classList.add('hidden');
       document.getElementById('tabLeaderboard').classList.add('hidden');
@@ -201,8 +184,10 @@
       }
     }
 
-    window.handlePlayerSubmit = function(e) {
+    // --- Add / Edit / Delete Player ---
+    function handlePlayerSubmit(e) {
       e.preventDefault();
+      
       const nameInput = document.getElementById('playerName');
       const buyInInput = document.getElementById('playerBuyIn');
       
@@ -224,7 +209,7 @@
       renderActiveTable();
     }
 
-    window.editPlayer = function(id) {
+    function editPlayer(id) {
       const p = activePlayers.find(x => x.id === id);
       if (!p) return;
 
@@ -243,7 +228,7 @@
       renderActiveTable();
     }
 
-    window.deletePlayer = function(id) {
+    function deletePlayer(id) {
       const p = activePlayers.find(x => x.id === id);
       if (!p) return;
 
@@ -253,7 +238,7 @@
       }
     }
 
-    window.updateReloads = function(id, delta) {
+    function updateReloads(id, delta) {
       const p = activePlayers.find(x => x.id === id);
       if (p) {
         p.reloads = Math.max(0, Math.round((p.reloads + delta) * 10) / 10);
@@ -261,13 +246,19 @@
       }
     }
 
-    window.handleChipsInput = function(id, val) {
+    // Direct input handler to prevent DOM re-render cursor jumps
+    function handleChipsInput(id, val) {
       const p = activePlayers.find(x => x.id === id);
       if (p) {
         p.finalChips = val === '' ? 0 : parseFloat(val) || 0;
         const cashValue = p.finalChips / chipRatio;
+        
+        // Target specifically this player's display label without re-rendering active roster
         const label = document.getElementById(`cash-display-${id}`);
-        if (label) label.innerText = `($${cashValue.toFixed(2)})`;
+        if (label) {
+          label.innerText = `($${cashValue.toFixed(2)})`;
+        }
+
         validateZeroSum();
       }
     }
@@ -297,15 +288,17 @@
       }
     }
 
-    // --- Database Save & Fetch ---
-    window.calculateAndSave = async function() {
+    // --- Settlement & localStorage Handling ---
+    function calculateAndSave() {
       if (activePlayers.length === 0) {
         alert("Please add at least one player before ending the game.");
         return;
       }
 
       if (!validateZeroSum()) {
-        if (!confirm("Your remaining chips do not equal total buy-ins! Do you still want to force settle?")) return;
+        if (!confirm("Your remaining chips do not equal total buy-ins! Do you still want to force settle?")) {
+          return;
+        }
       }
 
       let balances = activePlayers.map(p => {
@@ -340,57 +333,30 @@
       }
 
       const sessionData = {
-        timestamp: Date.now(),
+        id: Date.now(),
         date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         players: balances,
         transactions: transactions
       };
 
-      try {
-        await addDoc(collection(db, "games"), sessionData);
-        await fetchHistoryFromDB();
-        
-        lastGameSession = sessionData;
-        activePlayers = [];
-        renderActiveTable();
-        switchTab('details');
-      } catch (err) {
-        alert("Error saving game to database: " + err.message);
-      }
+      const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
+      history.unshift(sessionData);
+      localStorage.setItem('poker_history', JSON.stringify(history));
+
+      lastGameSession = sessionData;
+      activePlayers = [];
+      renderActiveTable();
+
+      switchTab('details');
     }
 
-    async function fetchHistoryFromDB() {
-      try {
-        const q = query(collection(db, "games"), orderBy("timestamp", "desc"));
-        const snapshot = await getDocs(q);
-        historyCache = snapshot.docs.map(docSnap => ({ dbId: docSnap.id, ...docSnap.data() }));
-        if (historyCache.length > 0 && !lastGameSession) {
-          lastGameSession = historyCache[0];
-        }
-      } catch (err) {
-        console.error("Error loading games:", err);
-      }
-    }
-
-    window.clearHistory = async function() {
-      if (confirm("Are you sure you want to delete all historical games from the cloud database?")) {
-        try {
-          const snapshot = await getDocs(collection(db, "games"));
-          const deletePromises = snapshot.docs.map(docSnap => deleteDoc(doc(db, "games", docSnap.id)));
-          await Promise.all(deletePromises);
-          
-          historyCache = [];
-          lastGameSession = null;
-          renderLeaderboard();
-          renderDetails();
-          alert("Database reset successfully!");
-        } catch (err) {
-          alert("Failed to clear history: " + err.message);
-        }
-      }
-    }
-
+    // --- Render Game Details Tab ---
     function renderDetails() {
+      if (!lastGameSession) {
+        const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
+        if (history.length > 0) lastGameSession = history[0];
+      }
+
       const txContainer = document.getElementById('detailsTransactions');
       const playerBody = document.getElementById('detailsPlayerBody');
       const dateHeader = document.getElementById('detailsDate');
@@ -421,10 +387,12 @@
       `).join('');
     }
 
+    // --- Render Leaderboard Tab ---
     function renderLeaderboard() {
+      const history = JSON.parse(localStorage.getItem('poker_history') || '[]');
       const stats = {};
 
-      historyCache.forEach(session => {
+      history.forEach(session => {
         session.players.forEach(p => {
           if (!stats[p.name]) {
             stats[p.name] = { games: 0, reloads: 0, net: 0 };
@@ -451,7 +419,7 @@
       `).join('') : `<tr><td colspan="4" class="py-4 text-center text-slate-500">No past games recorded yet.</td></tr>`;
 
       const historyLog = document.getElementById('historyLog');
-      historyLog.innerHTML = historyCache.length ? historyCache.map(s => `
+      historyLog.innerHTML = history.length ? history.map(s => `
         <div class="bg-slate-700/40 p-3 rounded-lg border border-slate-700 space-y-1">
           <div class="flex justify-between font-bold text-slate-300 mb-1">
             <span>📅 ${s.date}</span>
@@ -462,6 +430,15 @@
           </div>
         </div>
       `).join('') : `<div class="text-slate-500">History is empty.</div>`;
+    }
+
+    function clearHistory() {
+      if (confirm("Are you sure you want to delete all historical games and reset the leaderboard?")) {
+        localStorage.removeItem('poker_history');
+        lastGameSession = null;
+        renderLeaderboard();
+        renderDetails();
+      }
     }
 
     function renderActiveTable() {
@@ -491,6 +468,7 @@
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-600/50 pt-2">
+            <!-- Reload Controls -->
             <div class="flex items-center gap-1">
               <span class="text-xs text-slate-400 mr-1">Reloads:</span>
               <div class="flex items-center bg-slate-800 rounded border border-slate-600 p-0.5 gap-0.5">
@@ -502,6 +480,7 @@
               </div>
             </div>
 
+            <!-- Chips Entry (Keyboard friendly, no arrow spinners, no jump glitch) -->
             <div class="flex items-center gap-1 ml-auto">
               <span class="text-xs text-slate-400">Chips:</span>
               <input type="number" value="${p.finalChips || ''}" placeholder="0" oninput="handleChipsInput(${p.id}, this.value)" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500">
@@ -515,8 +494,7 @@
       validateZeroSum();
     }
 
-    // Initialize DB on page load
-    await fetchHistoryFromDB();
+    // Initial render
     renderActiveTable();
   </script>
 </body>
