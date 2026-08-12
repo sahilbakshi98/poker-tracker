@@ -139,7 +139,7 @@
   <script>
     let activePlayers = [];
     let lastGameSession = null;
-    let chipRatio = 10; // Default: 10 chip points = $1 cash
+    let chipRatio = 10;
 
     function updateRatio(val) {
       chipRatio = parseFloat(val) || 1;
@@ -173,7 +173,7 @@
       }
     }
 
-    // --- Add Player via Form ---
+    // --- Add / Edit / Delete Player ---
     function handlePlayerSubmit(e) {
       e.preventDefault();
       
@@ -196,6 +196,35 @@
       nameInput.value = '';
       nameInput.focus();
       renderActiveTable();
+    }
+
+    function editPlayer(id) {
+      const p = activePlayers.find(x => x.id === id);
+      if (!p) return;
+
+      const newName = prompt("Edit Player Name:", p.name);
+      if (newName === null) return; // User cancelled
+
+      const newBuyInStr = prompt("Edit Initial Buy-In ($):", p.initialBuyIn);
+      if (newBuyInStr === null) return;
+
+      const trimmedName = newName.trim();
+      const parsedBuyIn = parseFloat(newBuyInStr);
+
+      if (trimmedName) p.name = trimmedName;
+      if (!isNaN(parsedBuyIn) && parsedBuyIn > 0) p.initialBuyIn = parsedBuyIn;
+
+      renderActiveTable();
+    }
+
+    function deletePlayer(id) {
+      const p = activePlayers.find(x => x.id === id);
+      if (!p) return;
+
+      if (confirm(`Remove "${p.name}" from the active game?`)) {
+        activePlayers = activePlayers.filter(x => x.id !== id);
+        renderActiveTable();
+      }
     }
 
     function updateReloads(id, delta) {
@@ -250,7 +279,6 @@
         }
       }
 
-      // 1. Convert chips to cash and calculate net positions
       let balances = activePlayers.map(p => {
         const invested = p.initialBuyIn + (p.reloads * p.initialBuyIn);
         const cashValue = p.finalChips / chipRatio;
@@ -265,7 +293,6 @@
         };
       });
 
-      // 2. Debt Minimization
       let debtors = balances.filter(b => b.net < 0).map(b => ({ name: b.name, net: -b.net }));
       let creditors = balances.filter(b => b.net > 0).map(b => ({ name: b.name, net: b.net }));
 
@@ -283,7 +310,6 @@
         if (creditors[j].net === 0) j++;
       }
 
-      // 3. Store Session
       const sessionData = {
         id: Date.now(),
         date: new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -295,12 +321,10 @@
       history.unshift(sessionData);
       localStorage.setItem('poker_history', JSON.stringify(history));
 
-      // 4. Reset Active State
       lastGameSession = sessionData;
       activePlayers = [];
       renderActiveTable();
 
-      // 5. Navigate to Details Tab
       switchTab('details');
     }
 
@@ -410,19 +434,24 @@
         return `
         <div class="bg-slate-700/50 p-3 rounded-lg border border-slate-600 flex flex-col gap-2">
           <div class="flex justify-between items-center">
-            <span class="font-bold text-emerald-300 text-sm">${p.name} <span class="text-xs text-slate-400 font-normal">($${p.initialBuyIn.toFixed(2)}/buy-in)</span></span>
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-emerald-300 text-sm">${p.name} <span class="text-xs text-slate-400 font-normal">($${p.initialBuyIn.toFixed(2)}/buy-in)</span></span>
+              <!-- Edit & Delete Buttons -->
+              <button onclick="editPlayer(${p.id})" title="Edit Player" class="text-slate-400 hover:text-amber-400 text-xs p-1 transition">✏️</button>
+              <button onclick="deletePlayer(${p.id})" title="Delete Player" class="text-slate-400 hover:text-rose-400 text-xs p-1 transition">🗑️</button>
+            </div>
             <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300">Total In: $${totalIn.toFixed(2)}</span>
           </div>
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-1">
               <span class="text-xs text-slate-400">Reloads:</span>
-              <button onclick="updateReloads(${p.id}, -1)" class="w-6 h-6 bg-slate-600 rounded font-bold text-sm">-</button>
+              <button onclick="updateReloads(${p.id}, -1)" class="w-6 h-6 bg-slate-600 rounded font-bold text-sm hover:bg-slate-500 transition">-</button>
               <span class="px-2 font-mono text-sm">${p.reloads}</span>
-              <button onclick="updateReloads(${p.id}, 1)" class="w-6 h-6 bg-slate-600 rounded font-bold text-sm">+</button>
+              <button onclick="updateReloads(${p.id}, 1)" class="w-6 h-6 bg-slate-600 rounded font-bold text-sm hover:bg-slate-500 transition">+</button>
             </div>
             <div class="flex items-center gap-1">
               <span class="text-xs text-slate-400">Chips:</span>
-              <input type="number" value="${p.finalChips}" oninput="updateChips(${p.id}, this.value)" step="any" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm font-mono">
+              <input type="number" value="${p.finalChips}" oninput="updateChips(${p.id}, this.value)" step="any" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500">
               <span class="text-xs text-emerald-400 font-mono font-semibold">($${cashValue.toFixed(2)})</span>
             </div>
           </div>
