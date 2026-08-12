@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Friday Night Poker Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Hide number input spinners (arrows) */
+    input[type='number']::-webkit-inner-spin-button,
+    input[type='number']::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type='number'] {
+      -moz-appearance: textfield;
+    }
+  </style>
 </head>
 <body class="bg-slate-900 text-slate-100 p-4 max-w-xl mx-auto min-h-screen font-sans pb-12">
 
@@ -235,10 +246,21 @@
       }
     }
 
-    function updateChips(id, val) {
+    // Direct input handler to prevent DOM re-render cursor jumps
+    function handleChipsInput(id, val) {
       const p = activePlayers.find(x => x.id === id);
-      if (p) p.finalChips = parseFloat(val) || 0;
-      renderActiveTable();
+      if (p) {
+        p.finalChips = val === '' ? 0 : parseFloat(val) || 0;
+        const cashValue = p.finalChips / chipRatio;
+        
+        // Target specifically this player's display label without re-rendering active roster
+        const label = document.getElementById(`cash-display-${id}`);
+        if (label) {
+          label.innerText = `($${cashValue.toFixed(2)})`;
+        }
+
+        validateZeroSum();
+      }
     }
 
     function validateZeroSum() {
@@ -446,7 +468,7 @@
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-600/50 pt-2">
-            <!-- Reload Controls with -1, -0.5, +0.5, +1 -->
+            <!-- Reload Controls -->
             <div class="flex items-center gap-1">
               <span class="text-xs text-slate-400 mr-1">Reloads:</span>
               <div class="flex items-center bg-slate-800 rounded border border-slate-600 p-0.5 gap-0.5">
@@ -458,11 +480,11 @@
               </div>
             </div>
 
-            <!-- Chips Entry -->
+            <!-- Chips Entry (Keyboard friendly, no arrow spinners, no jump glitch) -->
             <div class="flex items-center gap-1 ml-auto">
               <span class="text-xs text-slate-400">Chips:</span>
-              <input type="number" value="${p.finalChips}" oninput="updateChips(${p.id}, this.value)" step="any" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500">
-              <span class="text-xs text-emerald-400 font-mono font-semibold">($${cashValue.toFixed(2)})</span>
+              <input type="number" value="${p.finalChips || ''}" placeholder="0" oninput="handleChipsInput(${p.id}, this.value)" class="w-20 bg-slate-800 text-right px-2 py-1 rounded border border-slate-600 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500">
+              <span id="cash-display-${p.id}" class="text-xs text-emerald-400 font-mono font-semibold">($${cashValue.toFixed(2)})</span>
             </div>
           </div>
         </div>
